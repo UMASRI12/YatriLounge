@@ -20,11 +20,39 @@ npm run dev
 
 Vite will print a local URL (for example `http://127.0.0.1:5173`).
 
+## Python backend (FastAPI)
+
+This repo includes a small **Python API** in `backend/` that reads data from InsForge and serves it to the React dashboard.
+
+### Run the backend
+
+```bash
+cd backend
+python -m venv .venv
+.\.venv\Scripts\activate
+pip install -r requirements.txt
+copy .env.example .env
+uvicorn main:app --reload --host 127.0.0.1 --port 8000
+```
+
+Set these in `backend/.env`:
+
+- `INSFORGE_BASE_URL`
+- `INSFORGE_ANON_KEY`
+
+### Point the frontend at the Python API
+
+Optionally set (in your root `.env.local`):
+
+```bash
+VITE_YATRILOUNGE_API_URL=http://127.0.0.1:8000
+```
+
 ## Backend (InsForge) integration
 
 The UI is built to work in two modes:
 
-- **Live mode** (recommended): loads airports, status, forecast, and flights from InsForge via `@insforge/sdk`.
+- **Live mode** (recommended): loads data via the Python backend (which reads from InsForge).
 - **Demo mode**: uses local seed data if InsForge isn’t configured or returns an error.
 
 ### Configure environment variables

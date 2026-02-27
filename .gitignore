@@ -16,3 +16,10 @@ node_modules
 
 # Vite local env
 .env.local
+
+# Python
+backend/.env
+backend/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
