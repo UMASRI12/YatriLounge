@@ -10,6 +10,8 @@ import {
 } from 'recharts';
 import { motion } from 'framer-motion';
 import { PlaneTakeoff, Gauge, Users, Clock, ChevronRight } from 'lucide-react';
+import { AuthModal } from './auth/AuthModal';
+import { useAuth } from './auth/AuthProvider';
 
 import {
   demoAirports,
@@ -39,6 +41,7 @@ const zoneToColor: Record<Zone, string> = {
 };
 
 const App: React.FC = () => {
+  const auth = useAuth();
   const [activeAirport, setActiveAirport] = useState<Airport['code']>('DEL');
   const [airports, setAirports] = useState<Airport[]>(demoAirports);
   const [status, setStatus] = useState<LoungeStatus>(demoStatus);
@@ -47,6 +50,7 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [backendError, setBackendError] = useState<string | null>(null);
   const [isLive, setIsLive] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
 
   const occupancyZone = useMemo(() => getZone(status.occupancyPercent), [status.occupancyPercent]);
 
@@ -127,8 +131,29 @@ const App: React.FC = () => {
                 <Clock className="h-3 w-3" />
                 {isLive ? 'Live now' : 'Demo'}
               </button>
+
+              {auth.user ? (
+                <button
+                  onClick={() => void auth.signOut()}
+                  className="hidden sm:inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/70 px-4 py-2 text-xs font-medium text-slate-700 shadow-sm hover:border-brand hover:text-brand transition-colors"
+                >
+                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-white text-[10px]">
+                    {(auth.user.profile?.name?.[0] ?? auth.user.email?.[0] ?? 'U').toUpperCase()}
+                  </span>
+                  Sign out
+                </button>
+              ) : (
+                <button
+                  onClick={() => setAuthOpen(true)}
+                  className="hidden sm:inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/70 px-4 py-2 text-xs font-medium text-slate-700 shadow-sm hover:border-brand hover:text-brand transition-colors"
+                >
+                  Sign in
+                </button>
+              )}
             </nav>
           </header>
+
+          <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
 
           {backendError && (
             <motion.div

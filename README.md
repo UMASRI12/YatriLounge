@@ -43,6 +43,12 @@ VITE_INSFORGE_ANON_KEY=your-anon-key
 
 An example file is provided at `.env.example`.
 
+## Authentication
+
+- **Google OAuth**: supported via InsForge Auth (`signInWithOAuth({ provider: 'google' })`).
+- **Email/password**: supported (with optional 6-digit email verification code depending on backend settings).
+- **Phone login**: InsForge TypeScript Auth SDK does **not** currently expose native SMS/phone OTP methods. To support phone OTP, integrate an SMS provider (e.g. Twilio Verify) via an InsForge Function and map verified numbers to user identities.
+
 ### Data model (tables)
 
 The dashboard expects these tables:
