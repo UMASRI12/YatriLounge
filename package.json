@@ -8,6 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@insforge/sdk": "^1.1.5",
     "framer-motion": "^12.34.3",
     "insforge": "^1.4.8",
     "lucide-react": "^0.575.0",

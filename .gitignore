@@ -13,3 +13,6 @@ yarn-error.log*
 pnpm-debug.log*
 
 node_modules
+
+# Vite local env
+.env.local

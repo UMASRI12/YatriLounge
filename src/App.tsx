@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Line,
   LineChart,
@@ -11,36 +11,18 @@ import {
 import { motion } from 'framer-motion';
 import { PlaneTakeoff, Gauge, Users, Clock, ChevronRight } from 'lucide-react';
 
-const occupancyPercent = 63;
-const peopleInLounge = 95;
-const flightsNext3Hours = 12;
-
-const predictionData = [
-  { time: '2PM', value: 28 },
-  { time: '3PM', value: 45 },
-  { time: '4PM', value: 63 },
-  { time: '5PM', value: 79 },
-  { time: '6PM', value: 95 },
-  { time: '7PM', value: 92 },
-];
-
-const flights = [
-  { time: '2PM', airline: 'IndiGo', aircraft: 'A320', business: 12, premium: 24, economy: 144 },
-  { time: '3PM', airline: 'Air India', aircraft: 'B787', business: 30, premium: 40, economy: 150 },
-  { time: '4PM', airline: 'SpiceJet', aircraft: 'B737', business: 8, premium: 16, economy: 136 },
-  { time: '5PM', airline: 'Vistara', aircraft: 'A321', business: 24, premium: 32, economy: 144 },
-  { time: '6PM', airline: 'IndiGo', aircraft: 'A320', business: 12, premium: 24, economy: 144 },
-  { time: '7PM', airline: 'Air India', aircraft: 'B787', business: 30, premium: 40, economy: 150 },
-];
-
-const hourlyForecast = [
-  { time: '2PM', value: 28 },
-  { time: '3PM', value: 45 },
-  { time: '4PM', value: 63 },
-  { time: '5PM', value: 79 },
-  { time: '6PM', value: 95 },
-  { time: '7PM', value: 92 },
-];
+import {
+  demoAirports,
+  demoFlights,
+  demoForecast,
+  demoStatus,
+  type Airport,
+  type ForecastPoint,
+  type FlightRow,
+  type LoungeStatus,
+} from './data/demo';
+import { fetchDashboardData } from './services/dashboardData';
+import { isInsforgeConfigured } from './lib/insforgeClient';
 
 type Zone = 'success' | 'warning' | 'danger';
 
@@ -57,7 +39,52 @@ const zoneToColor: Record<Zone, string> = {
 };
 
 const App: React.FC = () => {
-  const occupancyZone = getZone(occupancyPercent);
+  const [activeAirport, setActiveAirport] = useState<Airport['code']>('DEL');
+  const [airports, setAirports] = useState<Airport[]>(demoAirports);
+  const [status, setStatus] = useState<LoungeStatus>(demoStatus);
+  const [forecast, setForecast] = useState<ForecastPoint[]>(demoForecast);
+  const [flights, setFlights] = useState<FlightRow[]>(demoFlights);
+  const [isLoading, setIsLoading] = useState(false);
+  const [backendError, setBackendError] = useState<string | null>(null);
+  const [isLive, setIsLive] = useState(false);
+
+  const occupancyZone = useMemo(() => getZone(status.occupancyPercent), [status.occupancyPercent]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      setBackendError(null);
+
+      if (!isInsforgeConfigured) {
+        setIsLive(false);
+        return;
+      }
+
+      setIsLoading(true);
+      const res = await fetchDashboardData(activeAirport);
+      if (cancelled) return;
+
+      if (!res.ok) {
+        setBackendError(res.error);
+        setIsLive(false);
+        setIsLoading(false);
+        return;
+      }
+
+      setAirports(res.data.airports.length ? res.data.airports : demoAirports);
+      setStatus(res.data.status.occupancyPercent ? res.data.status : demoStatus);
+      setForecast(res.data.forecast.length ? res.data.forecast : demoForecast);
+      setFlights(res.data.flights.length ? res.data.flights : demoFlights);
+      setIsLive(true);
+      setIsLoading(false);
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeAirport]);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -98,24 +125,40 @@ const App: React.FC = () => {
               </button>
               <button className="inline-flex items-center gap-2 rounded-full bg-brand text-white px-4 py-2 text-xs font-medium shadow-soft hover:bg-teal-700 transition-colors">
                 <Clock className="h-3 w-3" />
-                Live now
+                {isLive ? 'Live now' : 'Demo'}
               </button>
             </nav>
           </header>
 
+          {backendError && (
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="glass-card p-4 border border-amber-200 bg-amber-50/70"
+            >
+              <p className="text-sm font-medium text-amber-900">Backend not ready</p>
+              <p className="mt-1 text-xs text-amber-800/90">
+                {backendError}
+              </p>
+              <p className="mt-1 text-[11px] text-amber-800/80">
+                Tip: set <code className="font-mono">VITE_INSFORGE_BASE_URL</code> and (optionally){' '}
+                <code className="font-mono">VITE_INSFORGE_ANON_KEY</code> in <code className="font-mono">.env.local</code>.
+              </p>
+            </motion.div>
+          )}
+
           {/* Airport selector */}
           <section className="grid gap-4 md:grid-cols-3">
-            {[
-              { code: 'DEL', city: 'Delhi', flights: 42, active: true },
-              { code: 'BOM', city: 'Mumbai', flights: 38, active: false },
-              { code: 'BLR', city: 'Bengaluru', flights: 35, active: false },
-            ].map((airport) => (
+            {airports.map((airport) => {
+              const isActive = airport.code === activeAirport;
+              return (
               <motion.button
                 key={airport.code}
                 whileHover={{ y: -4, scale: 1.01 }}
                 whileTap={{ scale: 0.99 }}
+                onClick={() => setActiveAirport(airport.code)}
                 className={`glass-card flex items-center justify-between p-4 text-left transition-all ${
-                  airport.active
+                  isActive
                     ? 'border-brand shadow-soft ring-2 ring-brand/10'
                     : 'hover:border-brand/40 hover:shadow-md'
                 }`}
@@ -125,7 +168,7 @@ const App: React.FC = () => {
                     <span className="text-xs uppercase tracking-widest text-slate-400">
                       AIRPORT
                     </span>
-                    {airport.active && (
+                    {isActive && (
                       <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 border border-emerald-100">
                         Active
                       </span>
@@ -138,7 +181,7 @@ const App: React.FC = () => {
                     <span className="text-sm text-slate-500">{airport.city}</span>
                   </div>
                   <p className="mt-1 text-xs text-slate-500">
-                    {airport.flights} flights monitored
+                    {airport.flightsMonitored} flights monitored
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-2">
@@ -149,7 +192,8 @@ const App: React.FC = () => {
                   <ChevronRight className="h-4 w-4 text-slate-300" />
                 </div>
               </motion.button>
-            ))}
+            );
+            })}
           </section>
 
           {/* Main grid */}
@@ -164,7 +208,7 @@ const App: React.FC = () => {
                     Live lounge occupancy
                   </div>
                   <h2 className="text-xl font-semibold tracking-tight text-slate-900">
-                    Delhi International Lounge · T3
+                    {activeAirport} International Lounge · Terminal
                   </h2>
                   <p className="text-sm text-slate-500">
                     Smart predictions from upcoming departures, historical patterns, and live footfall.
@@ -173,18 +217,24 @@ const App: React.FC = () => {
                     <div className="rounded-xl bg-slate-50/80 px-3 py-2">
                       <p className="text-xs text-slate-500">Next 3 hours</p>
                       <p className="mt-1 font-medium text-slate-900">
-                        {flightsNext3Hours} flights monitored
+                        {status.flightsNext3Hours} flights monitored
                       </p>
                     </div>
                     <div className="rounded-xl bg-slate-50/80 px-3 py-2">
                       <p className="text-xs text-slate-500">Model confidence</p>
-                      <p className="mt-1 font-medium text-slate-900">92%</p>
+                      <p className="mt-1 font-medium text-slate-900">{isLoading ? '…' : '92%'} </p>
                     </div>
                   </div>
                 </div>
 
                 <div className="flex-1 flex items-center justify-center">
-                  <RadialGauge percent={occupancyPercent} zone={occupancyZone} people={peopleInLounge} />
+                  <RadialGauge
+                    percent={status.occupancyPercent}
+                    zone={occupancyZone}
+                    people={status.peopleInLounge}
+                    flightsNext3Hours={status.flightsNext3Hours}
+                    isLoading={isLoading}
+                  />
                 </div>
               </section>
 
@@ -230,7 +280,7 @@ const App: React.FC = () => {
                 </div>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={predictionData} margin={{ left: -18, right: 4, top: 10 }}>
+                    <LineChart data={forecast} margin={{ left: -18, right: 4, top: 10 }}>
                       <XAxis
                         dataKey="time"
                         tickLine={false}
@@ -259,7 +309,7 @@ const App: React.FC = () => {
                       <Line
                         type="monotone"
                         dataKey="value"
-                        stroke={zoneToColor[getZone(occupancyPercent)]}
+                        stroke={zoneToColor[getZone(status.occupancyPercent)]}
                         strokeWidth={2.5}
                         dot={{ r: 3, strokeWidth: 1, stroke: '#e2e8f0', fill: '#0f766e' }}
                         activeDot={{ r: 5 }}
@@ -325,7 +375,7 @@ const App: React.FC = () => {
                   <span className="text-[11px] text-slate-500">Scroll for details</span>
                 </div>
                 <div className="flex gap-3 overflow-x-auto pb-1">
-                  {hourlyForecast.map((slot) => {
+                  {forecast.map((slot) => {
                     const zone = getZone(slot.value);
                     const emoji =
                       zone === 'success' ? '🟢' : zone === 'warning' ? '🟡' : '🔴';
@@ -384,7 +434,7 @@ const App: React.FC = () => {
                 </div>
 
                 {/* Alternatives (conditional) */}
-                {occupancyPercent > 80 && (
+                {status.occupancyPercent > 80 && (
                   <motion.div
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -420,14 +470,23 @@ interface RadialGaugeProps {
   percent: number;
   zone: Zone;
   people: number;
+  flightsNext3Hours: number;
+  isLoading: boolean;
 }
 
-const RadialGauge: React.FC<RadialGaugeProps> = ({ percent, zone, people }) => {
+const RadialGauge: React.FC<RadialGaugeProps> = ({
+  percent,
+  zone,
+  people,
+  flightsNext3Hours,
+  isLoading,
+}) => {
   const radius = 80;
   const strokeWidth = 14;
   const normalizedRadius = radius - strokeWidth / 2;
   const circumference = 2 * Math.PI * normalizedRadius;
   const strokeDashoffset = circumference - (percent / 100) * circumference;
+  const size = radius * 2;
 
   const color = zoneToColor[zone];
 
@@ -439,7 +498,11 @@ const RadialGauge: React.FC<RadialGaugeProps> = ({ percent, zone, people }) => {
       className="relative h-48 w-48 md:h-56 md:w-56"
     >
       <div className="absolute inset-6 rounded-full bg-gradient-to-br from-white/80 to-slate-50/80 shadow-soft" />
-      <svg className="h-full w-full rotate-[-90deg]">
+      <svg
+        className="h-full w-full rotate-[-90deg]"
+        viewBox={`0 0 ${size} ${size}`}
+        preserveAspectRatio="xMidYMid meet"
+      >
         <circle
           stroke="#e5e7eb"
           fill="transparent"
@@ -465,10 +528,10 @@ const RadialGauge: React.FC<RadialGaugeProps> = ({ percent, zone, people }) => {
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center text-center rotate-0">
         <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Occupancy</p>
-        <p className="mt-1 text-3xl font-semibold text-slate-900">{percent}%</p>
-        <p className="mt-1 text-xs text-slate-500"> {people} people in lounge</p>
+        <p className="mt-1 text-3xl font-semibold text-slate-900">{isLoading ? '…' : `${percent}%`}</p>
+        <p className="mt-1 text-xs text-slate-500">{isLoading ? 'Updating…' : `${people} people in lounge`}</p>
         <p className="mt-2 text-[11px] text-slate-400">
-          Based on {flightsNext3Hours} flights in next 3 hours
+          Based on {isLoading ? '…' : flightsNext3Hours} flights in next 3 hours
         </p>
       </div>
     </motion.div>
